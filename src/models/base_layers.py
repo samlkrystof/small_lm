@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 from typing import Literal
-
+from liger_kernel.transformers import LigerFusedLinearCrossEntropyLoss, LigerLayerNorm
 
 class FeedForward(nn.Module):
     def __init__(self, d_model: int, activation: Literal['gelu', 'relu'], hidden_dim, **kwargs):
@@ -142,9 +142,9 @@ class Block(nn.Module):
         self.activation = config.activation
         self.hidden_dim = config.hidden_dim
 
-        self.layer_norm1 = nn.LayerNorm(self.d_model, **kwargs)
+        self.layer_norm1 = LigerLayerNorm(self.d_model, **kwargs)
         self.attention = MultiHeadedAttention(self.d_model, self.num_heads, **kwargs)
-        self.layer_norm2 = nn.LayerNorm(self.d_model, **kwargs)
+        self.layer_norm2 = LigerLayerNorm(self.d_model, **kwargs)
         self.mlp = FeedForward(self.d_model, self.activation, self.hidden_dim, **kwargs)
 
     def forward(self, x_BSE: torch.Tensor) -> torch.Tensor:
