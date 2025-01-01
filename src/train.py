@@ -209,7 +209,7 @@ class GPTTrainer:
             return self.static_loss.detach()
         else:
             with torch.autocast(device_type=self.device, dtype=torch.bfloat16):
-                outputs, loss = self.model(x, y)
+                _, loss = self.model(x, y, skip_logits=True)
 
             loss = loss / self.grad_accumulation_steps
             loss.backward()

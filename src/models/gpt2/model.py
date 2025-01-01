@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from models.base_layers import Block
 from models.gpt2.config import GPT2Config
 from utils import make_copies, transform_keys
-
+from liger_kernel.transformers import LigerFusedLinearCrossEntropyLoss, LigerLayerNorm
 
 """
 Shape convention:
@@ -35,7 +35,7 @@ class GPT2(nn.Module):
             tok_embedding=nn.Embedding(config.vocab_size, config.d_model, **kwargs),
             pos_embedding=nn.Embedding(config.max_seq_len, config.d_model, **kwargs),
             blocks=nn.ModuleList([GPT2Block(config, **kwargs) for _ in range(config.num_layers)]),
-            final_norm=nn.LayerNorm(config.d_model, **kwargs),
+            final_norm=LigerLayerNorm(config.d_model, **kwargs),
         ))
         self.lm_head = nn.Linear(config.d_model, config.vocab_size, **kwargs, bias=False)  # as in gpt2
         # self.lm_head.weight = self.model.tok_embedding.weight
@@ -86,7 +86,7 @@ class GPT2(nn.Module):
 
         return gpt2
 
-    def forward(self, idx_BS: torch.Tensor, targets_BS: torch.Tensor = None):
+    def forward(self, idx_BS: torch.Tensor, targets_BS: torch.Tensor = None, skip_logits: bool = False):
         """
         :param idx: torch.Tensor [batch_size, seq_len]
         :param targets torch.Tensor [batch_size, seq_len]
@@ -100,11 +100,19 @@ class GPT2(nn.Module):
             x_BSE = block(x_BSE)
 
         x_BSE = self.model.final_norm(x_BSE)
-        logits_BSV = self.lm_head(x_BSE)
         loss = None
         if targets_BS is not None:
-            loss = F.cross_entropy(logits_BSV.view(-1, logits_BSV.size(-1)), targets_BS.view(-1))
-        return logits_BSV, loss
+             loss = LigerFusedLinearCrossEntropyLoss()(
+                 self.lm_head.weight.to(torch.bfloat16),
+                 x_BSE.reshape(-1, x_BSE.size(-1)).to(torch.bfloat16),
+                 targets_BS.view(-1),
+                 )
+
+        if not skip_logits:
+            logits_BSV = self.lm_head(x_BSE)
+            return logits_BSV, loss
+
+        return None, loss
 
     def configure_optimizers(self, weight_decay, learning_rate, device_type, master_process):
         # start with all of the candidate parameters (that require grad)

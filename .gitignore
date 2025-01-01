@@ -10,3 +10,6 @@ wandb/
 myenv/
 .history/
 **small_lm.egg-info/
+build/
+wandb/
+logs/
