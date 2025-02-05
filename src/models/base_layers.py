@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 from typing import Literal
-from liger_kernel.transformers import LigerFusedLinearCrossEntropyLoss, LigerLayerNorm
+from liger_kernel.transformers import LigerLayerNorm
 
 class FeedForward(nn.Module):
     def __init__(self, d_model: int, activation: Literal['gelu', 'relu'], hidden_dim, **kwargs):
